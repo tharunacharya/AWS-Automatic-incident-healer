@@ -1,0 +1,60 @@
+{
+  "Comment": "AI Incident Healer Workflow",
+  "StartAt": "AnalyzeIncident",
+  "States": {
+    "AnalyzeIncident": {
+      "Type": "Task",
+      "Resource": "${analyzer_arn}",
+      "Next": "CheckConfidence",
+      "ResultPath": "$.analysis"
+    },
+    "CheckConfidence": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.analysis.confidence",
+          "NumericGreaterThanEquals": 0.8,
+          "Next": "ExecuteHealing"
+        }
+      ],
+      "Default": "NotifyManualIntervention"
+    },
+    "ExecuteHealing": {
+      "Type": "Task",
+      "Resource": "${healer_arn}",
+      "Next": "VerifyHealing",
+      "ResultPath": "$.healing_result"
+    },
+    "VerifyHealing": {
+      "Type": "Task",
+      "Resource": "${analyzer_arn}",
+      "Parameters": {
+        "action": "verify",
+        "incident_id.$": "$.incident_id",
+        "timestamp.$": "$.timestamp"
+      },
+      "Next": "NotifySuccess",
+      "ResultPath": "$.verification"
+    },
+    "NotifySuccess": {
+      "Type": "Task",
+      "Resource": "${notifier_arn}",
+      "Parameters": {
+        "status": "HEALED",
+        "incident_id.$": "$.incident_id",
+        "details.$": "$.healing_result"
+      },
+      "End": true
+    },
+    "NotifyManualIntervention": {
+      "Type": "Task",
+      "Resource": "${notifier_arn}",
+      "Parameters": {
+        "status": "REQUIRES_APPROVAL",
+        "incident_id.$": "$.incident_id",
+        "analysis.$": "$.analysis"
+      },
+      "End": true
+    }
+  }
+}

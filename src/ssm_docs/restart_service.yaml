@@ -1,0 +1,23 @@
+description: "Restart a Service on EC2"
+schemaVersion: "0.3"
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  Service:
+    type: String
+    description: "Name of the service to restart"
+  InstanceId:
+    type: String
+    description: "Instance ID where the service is running"
+  AutomationAssumeRole:
+    type: String
+    description: "Role to assume for automation"
+mainSteps:
+  - name: restartService
+    action: "aws:runCommand"
+    inputs:
+      DocumentName: "AWS-RunShellScript"
+      InstanceIds:
+        - "{{ InstanceId }}"
+      Parameters:
+        commands:
+          - "systemctl restart {{ Service }}"

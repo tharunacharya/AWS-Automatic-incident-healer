@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfplan
+.terraform.lock.hcl
+
+# AWS / Serverless
+.aws-sam/
+.serverless/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+history.json
+history_*.json
+*.zip
