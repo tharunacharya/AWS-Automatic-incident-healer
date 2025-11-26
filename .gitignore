@@ -31,3 +31,9 @@ Thumbs.db
 history.json
 history_*.json
 *.zip
+
+# Local scripts and secrets
+create_user.py
+token.txt
+test_slack.py
+node_modules/

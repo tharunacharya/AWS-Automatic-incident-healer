@@ -1,5 +1,5 @@
 {
-  "Comment": "Enterprise Autonomous Incident Healer Workflow v2",
+  "Comment": "Enterprise Autonomous Incident Healer Workflow v3 (Dual Approval)",
   "StartAt": "ParallelAnalysis",
   "States": {
     "ParallelAnalysis": {
@@ -68,21 +68,27 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
       "Parameters": {
-        "FunctionName": "${notifier_arn}",
+        "FunctionName": "${send_approval_request_arn}",
         "Payload": {
-          "incident_id.$": "$.incident_id",
-          "status": "REQUIRES_APPROVAL",
-          "analysis.$": "$.ParallelAnalysis[0]",
           "taskToken.$": "$$.Task.Token",
-          "approval_api_url": "${approval_api_url}"
+          "incident_id.$": "$.incident_id",
+          "analysis.$": "$.ParallelAnalysis[0]",
+          "risk_assessment.$": "$.RiskAssessment"
         }
       },
+      "TimeoutSeconds": 3600,
       "ResultPath": "$.ApprovalResult",
       "Next": "ExecuteHealing",
       "Catch": [
         {
           "ErrorEquals": [
-            "ManualDenial"
+            "ManualRejection"
+          ],
+          "Next": "NotifyFailure"
+        },
+        {
+          "ErrorEquals": [
+            "States.Timeout"
           ],
           "Next": "NotifyFailure"
         }

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incident Approval</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #f4f6f8;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #1a202c;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .label {
+            font-weight: 600;
+            color: #718096;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .value {
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .risk-high {
+            color: #e53e3e;
+            font-weight: bold;
+        }
+
+        .cost {
+            color: #2b6cb0;
+            font-weight: bold;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-approve {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-reject {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-login {
+            background: #4299e1;
+            color: white;
+            width: 100%;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            margin: 10px 0;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #status-message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+    </style>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1001.0.min.js"></script>
+    <script src="https://rawgit.com/aws-amplify/amplify-js/master/dist/aws-amplify.min.js"></script>
+    <!-- Note: For simplicity in this demo, we'll use a basic fetch flow. In a real app, use Amplify Auth -->
+</head>
+
+<body>
+
+    <div id="login-screen" class="container">
+        <h1>Login Required</h1>
+        <p>Please sign in to review this approval request.</p>
+        <div class="section">
+            <div class="label">Username</div>
+            <input type="text" id="username" style="width: 100%; padding: 8px; margin-bottom: 10px;">
+            <div class="label">Password</div>
+            <input type="password" id="password" style="width: 100%; padding: 8px; margin-bottom: 20px;">
+            <button class="btn-login" onclick="login()">Sign In</button>
+        </div>
+        <div id="login-error" class="error hidden"></div>
+    </div>
+
+    <div id="approval-screen" class="container hidden">
+        <h1>Incident Approval Request</h1>
+
+        <div class="section">
+            <div class="label">Incident ID</div>
+            <div class="value" id="incident-id">Loading...</div>
+        </div>
+
+        <div class="section">
+            <div class="label">Analysis</div>
+            <div class="value" id="analysis">Loading...</div>
+        </div>
+
+        <div class="section">
+            <div class="label">Risk Assessment</div>
+            <div class="value">
+                Risk Level: <span id="risk-level" class="risk-high">...</span><br>
+                Est. Cost: <span id="cost" class="cost">...</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="label">Status</div>
+            <div class="value" id="status">PENDING</div>
+        </div>
+
+        <div class="actions" id="action-buttons">
+            <button class="btn-approve" onclick="openModal('APPROVE')">Approve</button>
+            <button class="btn-reject" onclick="openModal('REJECT')">Reject</button>
+        </div>
+
+        <div id="status-message" class="hidden"></div>
+    </div>
+
+    <div id="comment-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modal-title">Confirm Action</h2>
+            <p>Add an optional comment:</p>
+            <textarea id="comment-text" placeholder="Reason for decision..."></textarea>
+            <div class="actions" style="margin-top: 10px;">
+                <button onclick="submitDecision()" class="btn-login">Confirm</button>
+                <button onclick="closeModal()" style="background: #e2e8f0; color: #333;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - TO BE REPLACED BY DEPLOY SCRIPT
+        const CONFIG = {
+            API_URL: 'https://t6xl3sgnx1.execute-api.us-east-1.amazonaws.com',
+            USER_POOL_ID: 'us-east-1_6zYrX2ZdE',
+            CLIENT_ID: '7epq4n1lnllhvikqp5m9t2h5f0',
+            REGION: 'us-east-1'
+        };
+
+        let idToken = null;
+        let currentAction = null;
+
+        // Parse query params
+        const urlParams = new URLSearchParams(window.location.search);
+        const approvalId = urlParams.get('approvalId');
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                // Simple Cognito Auth using AWS SDK (Mocked for this single file demo to avoid huge dependencies)
+                // In reality, we'd use AmazonCognitoIdentity.CognitoUser etc.
+                // For this demo, we will simulate the auth flow or assume the user provides a valid token if we had a full auth library.
+                // BUT, to make this actually work without a build step, we'll use a raw fetch to Cognito IDP if possible, or just assume success for the UI demo if we can't easily bundle the SDK.
+
+                // ACTUALLY, let's use the AWS SDK included via CDN.
+                AWS.config.region = CONFIG.REGION;
+                const cognito = new AWS.CognitoIdentityServiceProvider();
+
+                const params = {
+                    AuthFlow: 'USER_PASSWORD_AUTH',
+                    ClientId: CONFIG.CLIENT_ID,
+                    AuthParameters: {
+                        'USERNAME': username,
+                        'PASSWORD': password
+                    }
+                };
+
+                const data = await cognito.initiateAuth(params).promise();
+                if (data.AuthenticationResult) {
+                    idToken = data.AuthenticationResult.IdToken;
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('approval-screen').classList.remove('hidden');
+                    loadApprovalDetails();
+                } else if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+                    // Handle new password (simplified: just alert)
+                    const newPw = prompt("New password required. Enter new password:");
+                    const challengeParams = {
+                        ChallengeName: 'NEW_PASSWORD_REQUIRED',
+                        ClientId: CONFIG.CLIENT_ID,
+                        ChallengeResponses: {
+                            'USERNAME': username,
+                            'NEW_PASSWORD': newPw,
+                            'SECRET_HASH': data.Session // If needed
+                        },
+                        Session: data.Session
+                    };
+                    const challengeData = await cognito.respondToAuthChallenge(challengeParams).promise();
+                    idToken = challengeData.AuthenticationResult.IdToken;
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('approval-screen').classList.remove('hidden');
+                    loadApprovalDetails();
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('login-error').textContent = err.message;
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        }
+
+        async function loadApprovalDetails() {
+            if (!approvalId) {
+                showStatus("Missing approvalId in URL", "error");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${CONFIG.API_URL}/approval/${approvalId}`, {
+                    headers: { 'Authorization': idToken } // GET might be public, but let's send it anyway
+                });
+
+                if (!response.ok) throw new Error("Failed to fetch details");
+
+                const data = await response.json();
+
+                document.getElementById('incident-id').textContent = data.incident_id;
+
+                // Parse nested JSON strings if needed
+                let analysis = data.analysis;
+                if (typeof analysis === 'string') analysis = JSON.parse(analysis);
+                document.getElementById('analysis').textContent = analysis.recommended_action + ": " + analysis.reasoning;
+
+                let risk = data.risk_assessment;
+                if (typeof risk === 'string') risk = JSON.parse(risk);
+                document.getElementById('risk-level').textContent = risk.risk_level;
+                document.getElementById('cost').textContent = `$${risk.estimated_cost}`;
+
+                document.getElementById('status').textContent = data.status;
+
+                if (data.status !== 'PENDING') {
+                    document.getElementById('action-buttons').classList.add('hidden');
+                    showStatus(`Request already ${data.status}`, data.status === 'APPROVED' ? 'success' : 'error');
+                }
+
+            } catch (err) {
+                showStatus(err.message, "error");
+            }
+        }
+
+        function openModal(action) {
+            currentAction = action;
+            document.getElementById('modal-title').textContent = action === 'APPROVE' ? 'Approve Action' : 'Reject Action';
+            document.getElementById('comment-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('comment-modal').style.display = 'none';
+            document.getElementById('comment-text').value = '';
+        }
+
+        async function submitDecision() {
+            const comment = document.getElementById('comment-text').value;
+            closeModal();
+
+            try {
+                const response = await fetch(`${CONFIG.API_URL}/approval/${approvalId}/decision`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': idToken
+                    },
+                    body: JSON.stringify({
+                        action: currentAction,
+                        comment: comment
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus("Decision submitted successfully!", "success");
+                    document.getElementById('action-buttons').classList.add('hidden');
+                    document.getElementById('status').textContent = currentAction + 'D';
+                } else {
+                    showStatus(data.error || "Failed to submit decision", "error");
+                }
+            } catch (err) {
+                showStatus(err.message, "error");
+            }
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('status-message');
+            el.textContent = msg;
+            el.className = type;
+            el.classList.remove('hidden');
+        }
+    </script>
+
+</body>
+
+</html>

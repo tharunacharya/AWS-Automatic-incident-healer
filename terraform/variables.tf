@@ -11,7 +11,13 @@ variable "project_name" {
 }
 
 variable "slack_webhook_url" {
-  description = "Slack Incoming Webhook URL"
+  description = "Slack Webhook URL for notifications"
   type        = string
+}
+
+variable "slack_signing_secret" {
+  description = "Slack Signing Secret for verifying requests"
+  type        = string
+  default     = "" # Optional for demo
   sensitive   = true
 }

@@ -116,25 +116,73 @@ resource "aws_lambda_function" "cost_estimator" {
   }
 }
 
-# Approval Handler Lambda
-data "archive_file" "approval_handler_zip" {
+# Send Approval Request Lambda
+data "archive_file" "send_approval_request_zip" {
   type        = "zip"
-  source_file = "${path.module}/../src/lambdas/approval_handler/handler.py"
-  output_path = "${path.module}/approval_handler.zip"
+  source_file = "${path.module}/../src/lambdas/send_approval_request/handler.py"
+  output_path = "${path.module}/send_approval_request.zip"
 }
 
-resource "aws_lambda_function" "approval_handler" {
-  filename         = data.archive_file.approval_handler_zip.output_path
-  function_name    = "${var.project_name}-approval-handler"
-  role             = aws_iam_role.approval_handler_role.arn
+resource "aws_lambda_function" "send_approval_request" {
+  filename         = data.archive_file.send_approval_request_zip.output_path
+  function_name    = "${var.project_name}-send-approval-request"
+  role             = aws_iam_role.send_approval_request_role.arn
   handler          = "handler.handler"
   runtime          = "python3.9"
-  source_code_hash = data.archive_file.approval_handler_zip.output_base64sha256
+  source_code_hash = data.archive_file.send_approval_request_zip.output_base64sha256
   timeout          = 10
 
   environment {
     variables = {
-      LOG_LEVEL = "INFO"
+      APPROVALS_TABLE_NAME = aws_dynamodb_table.approvals.name
+      SLACK_WEBHOOK_URL    = var.slack_webhook_url
+    }
+  }
+}
+
+# Slack Action Handler Lambda
+data "archive_file" "slack_action_handler_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../src/lambdas/slack_action_handler/handler.py"
+  output_path = "${path.module}/slack_action_handler.zip"
+}
+
+resource "aws_lambda_function" "slack_action_handler" {
+  filename         = data.archive_file.slack_action_handler_zip.output_path
+  function_name    = "${var.project_name}-slack-action-handler"
+  role             = aws_iam_role.slack_action_handler_role.arn
+  handler          = "handler.handler"
+  runtime          = "python3.9"
+  source_code_hash = data.archive_file.slack_action_handler_zip.output_base64sha256
+  timeout          = 10
+
+  environment {
+    variables = {
+      APPROVALS_TABLE_NAME = aws_dynamodb_table.approvals.name
+      SLACK_SIGNING_SECRET = var.slack_signing_secret
+    }
+  }
+}
+
+# Frontend Approval Handler Lambda
+data "archive_file" "frontend_approval_handler_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../src/lambdas/frontend_approval_handler/handler.py"
+  output_path = "${path.module}/frontend_approval_handler.zip"
+}
+
+resource "aws_lambda_function" "frontend_approval_handler" {
+  filename         = data.archive_file.frontend_approval_handler_zip.output_path
+  function_name    = "${var.project_name}-frontend-approval-handler"
+  role             = aws_iam_role.frontend_approval_handler_role.arn
+  handler          = "handler.handler"
+  runtime          = "python3.9"
+  source_code_hash = data.archive_file.frontend_approval_handler_zip.output_base64sha256
+  timeout          = 10
+
+  environment {
+    variables = {
+      APPROVALS_TABLE_NAME = aws_dynamodb_table.approvals.name
     }
   }
 }

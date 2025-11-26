@@ -225,7 +225,122 @@ resource "aws_iam_role_policy" "step_functions_policy" {
     ]
   })
 }
+# --- Send Approval Request Role ---
+resource "aws_iam_role" "send_approval_request_role" {
+  name               = "${var.project_name}-send-approval-request-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
 
+resource "aws_iam_role_policy" "send_approval_request_policy" {
+  name = "send-approval-request-policy"
+  role = aws_iam_role.send_approval_request_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "dynamodb:PutItem"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.approvals.arn
+      },
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+# --- Slack Action Handler Role ---
+resource "aws_iam_role" "slack_action_handler_role" {
+  name               = "${var.project_name}-slack-action-handler-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+resource "aws_iam_role_policy" "slack_action_handler_policy" {
+  name = "slack-action-handler-policy"
+  role = aws_iam_role.slack_action_handler_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.approvals.arn
+      },
+      {
+        Action = [
+          "states:SendTaskSuccess",
+          "states:SendTaskFailure"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+# --- Frontend Approval Handler Role (Updated) ---
+resource "aws_iam_role" "frontend_approval_handler_role" {
+  name               = "${var.project_name}-frontend-approval-handler-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+resource "aws_iam_role_policy" "frontend_approval_handler_policy" {
+  name = "frontend-approval-handler-policy"
+  role = aws_iam_role.frontend_approval_handler_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.approvals.arn
+      },
+      {
+        Action = [
+          "states:SendTaskSuccess",
+          "states:SendTaskFailure"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
 # --- Cost Estimator Role ---
 resource "aws_iam_role" "cost_estimator_role" {
   name               = "${var.project_name}-cost-estimator-role"
