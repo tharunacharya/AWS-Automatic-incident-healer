@@ -45,30 +45,64 @@ def get_logs(log_group, start_time, end_time):
         logger.error("Error fetching logs: %s", e)
         return []
 
-def invoke_bedrock(logs, alarm_name, reason):
-    prompt = f"""
+def invoke_bedrock(logs, alarm_name, reason, analysis_type="ROOT_CAUSE"):
+    base_prompt = f"""
     You are a Site Reliability Engineer. Analyze the following incident.
     
     Alarm Name: {alarm_name}
     Alarm Reason: {reason}
+    Analysis Type: {analysis_type}
     
     Recent Logs:
     {json.dumps(logs, indent=2)}
-    
-    Task:
-    1. Identify the Root Cause.
-    2. Recommend a Healing Action (must be one of: RESTART_SERVICE, SCALE_UP, CLEAR_CACHE, NONE).
-    3. Provide a Confidence Score (0.0 to 1.0).
-    4. Explain your reasoning.
-    
-    Output JSON format:
-    {{
-        "root_cause": "string",
-        "recommended_action": "string",
-        "confidence": float,
-        "reasoning": "string"
-    }}
     """
+    
+    if analysis_type == "PREDICTIVE":
+        prompt = base_prompt + """
+        Task:
+        1. Identify any potential future risks or anomalies related to this alarm.
+        2. Recommend a Preventive Action.
+        3. Provide a Risk Score (0.0 to 1.0).
+        
+        Output JSON format:
+        {
+            "predicted_risks": "string",
+            "preventive_action": "string",
+            "risk_score": float,
+            "reasoning": "string"
+        }
+        """
+    elif analysis_type == "RE_ANALYSIS":
+        prompt = base_prompt + """
+        Task:
+        1. Determine if the original issue appears to be resolved based on recent logs.
+        2. Identify if any new issues have emerged.
+        3. Provide a Resolution Confidence Score (0.0 to 1.0).
+        
+        Output JSON format:
+        {
+            "is_resolved": boolean,
+            "new_issues": "string",
+            "resolution_confidence": float,
+            "reasoning": "string"
+        }
+        """
+    else: # ROOT_CAUSE
+        prompt = base_prompt + """
+        Task:
+        1. Identify the Root Cause.
+        2. Recommend a Healing Action (must be one of: RESTART_SERVICE, SCALE_UP, CLEAR_CACHE, REBOOT_INSTANCE, NONE).
+        3. Provide a Confidence Score (0.0 to 1.0).
+        4. Explain your reasoning.
+        
+        Output JSON format:
+        {
+            "root_cause": "string",
+            "recommended_action": "string",
+            "confidence": float,
+            "reasoning": "string"
+        }
+        """
     
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
@@ -100,13 +134,35 @@ def invoke_bedrock(logs, alarm_name, reason):
         
     except Exception as e:
         logger.error("Error invoking Bedrock: %s", e)
-        # Fallback for demo/testing if Bedrock fails or model not available
-        return {
-            "root_cause": "Simulated: High CPU usage detected in logs",
-            "recommended_action": "RESTART_SERVICE",
-            "confidence": 0.85,
-            "reasoning": "Simulated reasoning based on alarm name."
-        }
+        # Fallback
+        if analysis_type == "PREDICTIVE":
+            return {
+                "predicted_risks": "None detected",
+                "preventive_action": "NONE",
+                "risk_score": 0.0,
+                "reasoning": "Fallback: No prediction available."
+            }
+        elif analysis_type == "RE_ANALYSIS":
+            return {
+                "is_resolved": True,
+                "new_issues": "None",
+                "resolution_confidence": 0.9,
+                "reasoning": "Fallback: Assumed resolved."
+            }
+        else:
+            if alarm_name == "HighTraffic":
+                return {
+                    "root_cause": "Simulated: High traffic load detected",
+                    "recommended_action": "SCALE_UP",
+                    "confidence": 0.95,
+                    "reasoning": "Traffic spike requires scaling up."
+                }
+            return {
+                "root_cause": "Simulated: High CPU usage detected in logs",
+                "recommended_action": "RESTART_SERVICE",
+                "confidence": 0.85,
+                "reasoning": "Simulated reasoning based on alarm name."
+            }
 
 def handler(event, context):
     logger.info("Received event: %s", json.dumps(event))
@@ -114,9 +170,9 @@ def handler(event, context):
     incident_id = event.get('incident_id')
     alarm_name = event.get('alarm_name')
     reason = event.get('reason')
+    analysis_type = event.get('analysis_type', 'ROOT_CAUSE')
     
     # In a real scenario, we'd determine the log group from the alarm or config
-    # For now, we'll use a dummy or environment variable if set
     log_group = os.environ.get('APP_LOG_GROUP', '/aws/lambda/demo-app')
     
     logs = get_logs(log_group, None, None)
@@ -128,11 +184,10 @@ def handler(event, context):
             {"@timestamp": datetime.now().isoformat(), "@message": "CRITICAL: CPU usage at 99%"}
         ]
     
-    # Check if this is a verification request
+    # Check if this is a verification request (Legacy support or specific step)
     action = event.get('action')
     if action == 'verify':
         logger.info("Verifying healing for incident %s", incident_id)
-        # In a real app, we'd check metrics again. For demo, assume success.
         verification_result = {"status": "VERIFIED", "message": "Metrics returned to normal."}
         
         table = dynamodb.Table(TABLE_NAME)
@@ -152,24 +207,25 @@ def handler(event, context):
         )
         return verification_result
 
-    # Default: Analyze incident
-    analysis = invoke_bedrock(logs, alarm_name, reason)
+    # Analyze incident
+    analysis = invoke_bedrock(logs, alarm_name, reason, analysis_type)
     
-    # Update DynamoDB
-    table = dynamodb.Table(TABLE_NAME)
-    table.update_item(
-        Key={
-            'incident_id': incident_id,
-            'timestamp': event.get('timestamp')
-        },
-        UpdateExpression="set analysis = :a, #status = :s",
-        ExpressionAttributeNames={
-            '#status': 'status'
-        },
-        ExpressionAttributeValues={
-            ':a': json.dumps(analysis),
-            ':s': 'ANALYZED'
-        }
-    )
+    # Update DynamoDB (only for ROOT_CAUSE to avoid overwriting main analysis)
+    if analysis_type == 'ROOT_CAUSE':
+        table = dynamodb.Table(TABLE_NAME)
+        table.update_item(
+            Key={
+                'incident_id': incident_id,
+                'timestamp': event.get('timestamp')
+            },
+            UpdateExpression="set analysis = :a, #status = :s",
+            ExpressionAttributeNames={
+                '#status': 'status'
+            },
+            ExpressionAttributeValues={
+                ':a': json.dumps(analysis),
+                ':s': 'ANALYZED'
+            }
+        )
     
     return analysis

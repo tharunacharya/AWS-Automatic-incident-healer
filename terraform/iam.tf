@@ -225,3 +225,63 @@ resource "aws_iam_role_policy" "step_functions_policy" {
     ]
   })
 }
+
+# --- Cost Estimator Role ---
+resource "aws_iam_role" "cost_estimator_role" {
+  name               = "${var.project_name}-cost-estimator-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+resource "aws_iam_role_policy" "cost_estimator_policy" {
+  name = "cost-estimator-policy"
+  role = aws_iam_role.cost_estimator_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+# --- Approval Handler Role ---
+resource "aws_iam_role" "approval_handler_role" {
+  name               = "${var.project_name}-approval-handler-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+resource "aws_iam_role_policy" "approval_handler_policy" {
+  name = "approval-handler-policy"
+  role = aws_iam_role.approval_handler_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "states:SendTaskSuccess",
+          "states:SendTaskFailure"
+        ]
+        Resource = "*" # Scope to SF ARN
+      }
+    ]
+  })
+}

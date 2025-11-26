@@ -10,6 +10,10 @@ output "step_functions_arn" {
   value = aws_sfn_state_machine.incident_workflow.arn
 }
 
+output "approval_api_url" {
+  value = "${aws_apigatewayv2_api.approval_api.api_endpoint}/approval"
+}
+
 output "detector_lambda_name" {
   value = aws_lambda_function.detector.function_name
 }

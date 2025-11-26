@@ -41,46 +41,91 @@ def execute_clear_cache(details):
     logger.info("Clearing cache")
     return {"status": "SUCCESS", "message": "Cache cleared via SSM."}
 
+def execute_reboot_instance(details):
+    logger.info("Rebooting EC2 instance")
+    time.sleep(2)
+    return {"status": "SUCCESS", "message": "Instance reboot initiated."}
+
+def execute_scale_down(details):
+    logger.info("Scaling down service (Rollback)")
+    return {"status": "SUCCESS", "message": "Service scaled down (Rollback)."}
+
+def execute_fallback(original_action, details):
+    logger.info(f"Executing fallback for {original_action}")
+    if original_action == 'RESTART_SERVICE':
+        return execute_reboot_instance(details)
+    else:
+        # Generic fallback
+        return execute_scale_up(details)
+
+def execute_rollback(original_action, details):
+    logger.info(f"Executing rollback for {original_action}")
+    if original_action == 'SCALE_UP':
+        return execute_scale_down(details)
+    else:
+        return {"status": "SKIPPED", "message": f"No rollback defined for {original_action}"}
+
 def handler(event, context):
     logger.info("Received event: %s", json.dumps(event))
     
     incident_id = event.get('incident_id')
-    healing_result = event.get('healing_result', {}) # Input from previous step if any
     
-    # The input structure depends on the Step Functions state input path.
-    # Based on workflow.json: 
-    # "ExecuteHealing": { "Type": "Task", "Resource": "${healer_arn}", ... }
-    # The input to this state is the output of CheckConfidence (which passes through the whole state).
-    # So event should contain 'analysis' from the previous step.
+    # Check for action_type (PRIMARY, FALLBACK, ROLLBACK)
+    action_type = event.get('action_type', 'PRIMARY')
     
+    # Analysis might be in 'analysis' (from parallel state output) or direct
     analysis = event.get('analysis', {})
+    if not analysis and 'analysis' in event.get('ParallelAnalysis', [{}])[0]:
+         # Handle Parallel state output structure if needed, but usually we pass specific inputs
+         analysis = event.get('ParallelAnalysis')[0].get('analysis', {})
+
     action = analysis.get('recommended_action')
-    
+    # If this is a fallback/rollback call, the action might be passed explicitly or derived
+    if not action:
+        action = event.get('original_action', 'UNKNOWN')
+
     result = {"status": "SKIPPED", "message": "No action taken."}
     
-    if action == 'RESTART_SERVICE':
-        result = execute_restart_service(event)
-    elif action == 'SCALE_UP':
-        result = execute_scale_up(event)
-    elif action == 'CLEAR_CACHE':
-        result = execute_clear_cache(event)
-    elif action == 'NONE':
-        result = {"status": "SKIPPED", "message": "AI recommended no action."}
-    else:
-        result = {"status": "UNKNOWN", "message": f"Unknown action: {action}"}
+    if action_type == 'FALLBACK':
+        result = execute_fallback(action, event)
+    elif action_type == 'ROLLBACK':
+        result = execute_rollback(action, event)
+    else: # PRIMARY
+        if action == 'RESTART_SERVICE':
+            result = execute_restart_service(event)
+        elif action == 'SCALE_UP':
+            result = execute_scale_up(event)
+        elif action == 'CLEAR_CACHE':
+            result = execute_clear_cache(event)
+        elif action == 'REBOOT_INSTANCE':
+            result = execute_reboot_instance(event)
+        elif action == 'NONE':
+            result = {"status": "SKIPPED", "message": "AI recommended no action."}
+        else:
+            result = {"status": "UNKNOWN", "message": f"Unknown action: {action}"}
         
     # Update DynamoDB
     table = dynamodb.Table(TABLE_NAME)
+    update_expr = "set healing_status = :s, healing_result = :r"
+    expr_attrs = {
+        ':s': result['status'],
+        ':r': json.dumps(result)
+    }
+    
+    if action_type == 'FALLBACK':
+        update_expr += ", fallback_used = :f"
+        expr_attrs[':f'] = True
+    elif action_type == 'ROLLBACK':
+        update_expr += ", rollback_status = :rb"
+        expr_attrs[':rb'] = result['status']
+
     table.update_item(
         Key={
             'incident_id': incident_id,
             'timestamp': event.get('timestamp')
         },
-        UpdateExpression="set healing_status = :s, healing_result = :r",
-        ExpressionAttributeValues={
-            ':s': result['status'],
-            ':r': json.dumps(result)
-        }
+        UpdateExpression=update_expr,
+        ExpressionAttributeValues=expr_attrs
     )
     
     return result

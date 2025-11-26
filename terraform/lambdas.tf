@@ -92,3 +92,49 @@ resource "aws_lambda_function" "notifier" {
     }
   }
 }
+
+# Cost Estimator Lambda
+data "archive_file" "cost_estimator_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../src/lambdas/cost_estimator/handler.py"
+  output_path = "${path.module}/cost_estimator.zip"
+}
+
+resource "aws_lambda_function" "cost_estimator" {
+  filename         = data.archive_file.cost_estimator_zip.output_path
+  function_name    = "${var.project_name}-cost-estimator"
+  role             = aws_iam_role.cost_estimator_role.arn
+  handler          = "handler.handler"
+  runtime          = "python3.9"
+  source_code_hash = data.archive_file.cost_estimator_zip.output_base64sha256
+  timeout          = 10
+
+  environment {
+    variables = {
+      LOG_LEVEL = "INFO"
+    }
+  }
+}
+
+# Approval Handler Lambda
+data "archive_file" "approval_handler_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../src/lambdas/approval_handler/handler.py"
+  output_path = "${path.module}/approval_handler.zip"
+}
+
+resource "aws_lambda_function" "approval_handler" {
+  filename         = data.archive_file.approval_handler_zip.output_path
+  function_name    = "${var.project_name}-approval-handler"
+  role             = aws_iam_role.approval_handler_role.arn
+  handler          = "handler.handler"
+  runtime          = "python3.9"
+  source_code_hash = data.archive_file.approval_handler_zip.output_base64sha256
+  timeout          = 10
+
+  environment {
+    variables = {
+      LOG_LEVEL = "INFO"
+    }
+  }
+}

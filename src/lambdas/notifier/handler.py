@@ -73,37 +73,27 @@ def handler(event, context):
             }
         })
     elif status == 'REQUIRES_APPROVAL':
+        task_token = event.get('taskToken')
+        approval_url = event.get('approval_api_url')
+        
+        # We need to encode the task token to pass it safely in a URL parameter or body
+        # For a simple GET link, we'd put it in query params.
+        # But the ApprovalHandler expects a POST with body.
+        # Slack buttons can send a payload to a URL (Interactive Components), but that requires setting up a Slack App Interactivity URL.
+        # For this demo, we'll provide a simple "Click to Approve" link that hits the API Gateway.
+        # Since we can't easily do a POST from a simple link, we might need to change ApprovalHandler to accept GET for demo simplicity,
+        # OR use a simple intermediate HTML page.
+        # Let's assume we use a simple GET for the demo to make it clickable.
+        
+        approve_link = f"{approval_url}?action=APPROVE&taskToken={task_token}"
+        deny_link = f"{approval_url}?action=DENY&taskToken={task_token}"
+        
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*Recommended Action:*\n{analysis.get('recommended_action', 'N/A')} (Confidence: {analysis.get('confidence', 'N/A')})"
+                "text": f"*Recommended Action:*\n{analysis.get('recommended_action', 'N/A')} (Confidence: {analysis.get('confidence', 'N/A')})\n\n*Risk Level:* HIGH\n\n< {approve_link} | ✅ Approve >   < {deny_link} | ❌ Deny >"
             }
-        })
-        blocks.append({
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Approve",
-                        "emoji": True
-                    },
-                    "value": "approve",
-                    "style": "primary"
-                },
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Deny",
-                        "emoji": True
-                    },
-                    "value": "deny",
-                    "style": "danger"
-                }
-            ]
         })
 
     message = {

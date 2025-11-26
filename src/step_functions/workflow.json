@@ -1,58 +1,193 @@
 {
-  "Comment": "AI Incident Healer Workflow",
-  "StartAt": "AnalyzeIncident",
+  "Comment": "Enterprise Autonomous Incident Healer Workflow v2",
+  "StartAt": "ParallelAnalysis",
   "States": {
-    "AnalyzeIncident": {
-      "Type": "Task",
-      "Resource": "${analyzer_arn}",
-      "Next": "CheckConfidence",
-      "ResultPath": "$.analysis"
+    "ParallelAnalysis": {
+      "Type": "Parallel",
+      "Next": "EvaluateRiskAndCost",
+      "ResultPath": "$.ParallelAnalysis",
+      "Branches": [
+        {
+          "StartAt": "AnalyzeIncident",
+          "States": {
+            "AnalyzeIncident": {
+              "Type": "Task",
+              "Resource": "${analyzer_arn}",
+              "Parameters": {
+                "incident_id.$": "$.incident_id",
+                "alarm_name.$": "$.alarm_name",
+                "reason.$": "$.reason",
+                "timestamp.$": "$.timestamp",
+                "analysis_type": "ROOT_CAUSE"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "PredictiveCheck",
+          "States": {
+            "PredictiveCheck": {
+              "Type": "Task",
+              "Resource": "${analyzer_arn}",
+              "Parameters": {
+                "incident_id.$": "$.incident_id",
+                "alarm_name.$": "$.alarm_name",
+                "reason.$": "$.reason",
+                "timestamp.$": "$.timestamp",
+                "analysis_type": "PREDICTIVE"
+              },
+              "End": true
+            }
+          }
+        }
+      ]
     },
-    "CheckConfidence": {
+    "EvaluateRiskAndCost": {
+      "Type": "Task",
+      "Resource": "${cost_estimator_arn}",
+      "Parameters": {
+        "analysis.$": "$.ParallelAnalysis[0]",
+        "prediction.$": "$.ParallelAnalysis[1]"
+      },
+      "ResultPath": "$.RiskAssessment",
+      "Next": "ApprovalChoice"
+    },
+    "ApprovalChoice": {
       "Type": "Choice",
       "Choices": [
         {
-          "Variable": "$.analysis.confidence",
-          "NumericGreaterThanEquals": 0.8,
-          "Next": "ExecuteHealing"
+          "Variable": "$.RiskAssessment.risk_level",
+          "StringEquals": "HIGH",
+          "Next": "RequestApproval"
         }
       ],
-      "Default": "NotifyManualIntervention"
+      "Default": "ExecuteHealing"
+    },
+    "RequestApproval": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Parameters": {
+        "FunctionName": "${notifier_arn}",
+        "Payload": {
+          "incident_id.$": "$.incident_id",
+          "status": "REQUIRES_APPROVAL",
+          "analysis.$": "$.ParallelAnalysis[0]",
+          "taskToken.$": "$$.Task.Token",
+          "approval_api_url": "${approval_api_url}"
+        }
+      },
+      "ResultPath": "$.ApprovalResult",
+      "Next": "ExecuteHealing",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "ManualDenial"
+          ],
+          "Next": "NotifyFailure"
+        }
+      ]
     },
     "ExecuteHealing": {
       "Type": "Task",
       "Resource": "${healer_arn}",
-      "Next": "VerifyHealing",
-      "ResultPath": "$.healing_result"
+      "Parameters": {
+        "incident_id.$": "$.incident_id",
+        "timestamp.$": "$.timestamp",
+        "analysis.$": "$.ParallelAnalysis[0]",
+        "action_type": "PRIMARY"
+      },
+      "ResultPath": "$.HealingResult",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "FallbackHealing"
+        }
+      ],
+      "Next": "WaitForStability"
+    },
+    "FallbackHealing": {
+      "Type": "Task",
+      "Resource": "${healer_arn}",
+      "Parameters": {
+        "incident_id.$": "$.incident_id",
+        "timestamp.$": "$.timestamp",
+        "analysis.$": "$.ParallelAnalysis[0]",
+        "action_type": "FALLBACK"
+      },
+      "ResultPath": "$.HealingResult",
+      "Next": "WaitForStability"
+    },
+    "WaitForStability": {
+      "Type": "Wait",
+      "Seconds": 10,
+      "Next": "VerifyHealing"
     },
     "VerifyHealing": {
       "Type": "Task",
       "Resource": "${analyzer_arn}",
       "Parameters": {
-        "action": "verify",
         "incident_id.$": "$.incident_id",
-        "timestamp.$": "$.timestamp"
+        "timestamp.$": "$.timestamp",
+        "action": "verify"
       },
-      "Next": "NotifySuccess",
-      "ResultPath": "$.verification"
+      "ResultPath": "$.VerificationResult",
+      "Next": "VerificationChoice"
+    },
+    "VerificationChoice": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.VerificationResult.status",
+          "StringEquals": "VERIFIED",
+          "Next": "NotifySuccess"
+        }
+      ],
+      "Default": "RollbackAction"
+    },
+    "RollbackAction": {
+      "Type": "Task",
+      "Resource": "${healer_arn}",
+      "Parameters": {
+        "incident_id.$": "$.incident_id",
+        "timestamp.$": "$.timestamp",
+        "analysis.$": "$.ParallelAnalysis[0]",
+        "action_type": "ROLLBACK"
+      },
+      "ResultPath": "$.RollbackResult",
+      "Next": "NotifyFailure"
     },
     "NotifySuccess": {
       "Type": "Task",
       "Resource": "${notifier_arn}",
       "Parameters": {
-        "status": "HEALED",
         "incident_id.$": "$.incident_id",
-        "details.$": "$.healing_result"
+        "status": "HEALED",
+        "details.$": "$.HealingResult",
+        "analysis.$": "$.ParallelAnalysis[0]"
       },
       "End": true
     },
-    "NotifyManualIntervention": {
+    "NotifyFailure": {
       "Type": "Task",
       "Resource": "${notifier_arn}",
       "Parameters": {
-        "status": "REQUIRES_APPROVAL",
         "incident_id.$": "$.incident_id",
-        "analysis.$": "$.analysis"
+        "status": "FAILED",
+        "details.$": "$.HealingResult",
+        "analysis.$": "$.ParallelAnalysis[0]"
       },
       "End": true
     }
