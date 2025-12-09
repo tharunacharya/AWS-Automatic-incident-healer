@@ -323,6 +323,14 @@ resource "aws_iam_role_policy" "frontend_approval_handler_policy" {
       },
       {
         Action = [
+          "dynamodb:GetItem",
+          "dynamodb:Query"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.incidents.arn
+      },
+      {
+        Action = [
           "states:SendTaskSuccess",
           "states:SendTaskFailure"
         ]

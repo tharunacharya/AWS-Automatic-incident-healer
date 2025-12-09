@@ -134,8 +134,10 @@ resource "aws_lambda_function" "send_approval_request" {
 
   environment {
     variables = {
+      INCIDENTS_TABLE_NAME = aws_dynamodb_table.incidents.name
       APPROVALS_TABLE_NAME = aws_dynamodb_table.approvals.name
       SLACK_WEBHOOK_URL    = var.slack_webhook_url
+      LOG_LEVEL            = "INFO"
     }
   }
 }
@@ -183,6 +185,7 @@ resource "aws_lambda_function" "frontend_approval_handler" {
   environment {
     variables = {
       APPROVALS_TABLE_NAME = aws_dynamodb_table.approvals.name
+      INCIDENTS_TABLE_NAME = aws_dynamodb_table.incidents.name
     }
   }
 }

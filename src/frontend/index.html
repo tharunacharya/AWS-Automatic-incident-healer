@@ -4,219 +4,648 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Incident Approval</title>
+    <title>Incident Mission Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1001.0.min.js"></script>
     <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --primary: #3b82f6;
+            --primary-glow: rgba(59, 130, 246, 0.5);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.5);
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.5);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #f4f6f8;
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-main);
             margin: 0;
             padding: 20px;
-            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
 
         .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 900px;
+            display: grid;
+            gap: 24px;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        h1 {
-            font-size: 24px;
-            margin-bottom: 20px;
-            color: #1a202c;
+        /* Glass Card */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
-        .section {
-            margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #eee;
+        .card:hover {
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.2);
         }
 
-        .label {
+        /* Typography & Header */
+        h1,
+        h2 {
+            margin: 0;
             font-weight: 600;
-            color: #718096;
+            letter-spacing: -0.5px;
+        }
+
+        .header-content {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .header-content h1 {
+            font-size: 28px;
+            background: linear-gradient(to right, #60a5fa, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-content p {
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .stat-box:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: 8px;
+            color: var(--text-main);
+        }
+
+        .text-danger {
+            color: #f87171;
+            text-shadow: 0 0 10px rgba(248, 113, 113, 0.3);
+        }
+
+        .text-primary {
+            color: #60a5fa;
+        }
+
+        /* Status Badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 16px;
+            border-radius: 99px;
             font-size: 12px;
+            font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
-        .value {
+        .badge-pending {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            animation: pulse-yellow 2s infinite;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        /* Timeline */
+        .timeline {
+            margin-top: 40px;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 10px;
+            bottom: 10px;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--success) 40%, #334155 100%);
+            opacity: 0.3;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-left: 32px;
+            margin-bottom: 32px;
+            opacity: 0.4;
+            transition: opacity 0.4s ease;
+        }
+
+        .timeline-item.active {
+            opacity: 1;
+        }
+
+        .timeline-item.completed {
+            opacity: 0.8;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--bg-dark);
+            border: 2px solid #475569;
+            box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.2);
+            transition: all 0.4s ease;
+        }
+
+        .timeline-item.active .timeline-dot {
+            border-color: var(--primary);
+            background: var(--primary);
+            box-shadow: 0 0 0 6px var(--primary-glow);
+            animation: pulse-blue 2s infinite;
+        }
+
+        .timeline-item.completed .timeline-dot {
+            border-color: var(--success);
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success-glow);
+        }
+
+        .timeline-content h4 {
+            margin: 0;
             font-size: 16px;
-            line-height: 1.5;
         }
 
-        .risk-high {
-            color: #e53e3e;
-            font-weight: bold;
+        .timeline-content p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: var(--text-muted);
         }
 
-        .cost {
-            color: #2b6cb0;
-            font-weight: bold;
+        /* Console */
+        .console {
+            margin-top: 32px;
+            background: #020617;
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            border: 1px solid #1e293b;
+            color: #cbd5e1;
+            height: 180px;
+            overflow-y: auto;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 1s ease;
         }
 
-        .actions {
+        .console-line {
+            margin-bottom: 6px;
             display: flex;
-            gap: 10px;
-            margin-top: 30px;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 4px;
+        }
+
+        .console-ts {
+            color: #64748b;
+            font-size: 11px;
+            min-width: 60px;
+        }
+
+        .console-msg {
+            color: #38bdf8;
+        }
+
+        /* Buttons */
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 32px;
         }
 
         button {
-            flex: 1;
-            padding: 12px;
+            padding: 16px;
             border: none;
-            border-radius: 6px;
-            font-size: 16px;
+            border-radius: 12px;
             font-weight: 600;
+            font-size: 15px;
             cursor: pointer;
-            transition: opacity 0.2s;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            position: relative;
+            overflow: hidden;
         }
 
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-approve {
-            background: #48bb78;
-            color: white;
-        }
-
-        .btn-reject {
-            background: #f56565;
-            color: white;
-        }
-
-        .btn-login {
-            background: #4299e1;
-            color: white;
-            width: 100%;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
+        button::after {
+            content: '';
+            position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            align-items: center;
-            justify-content: center;
+            background: linear-gradient(rgba(255, 255, 255, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.2s;
         }
 
-        .modal-content {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 400px;
+        button:hover::after {
+            opacity: 1;
         }
 
-        textarea {
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-approve {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            box-shadow: 0 4px 14px var(--success-glow);
+        }
+
+        .btn-reject {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+
+        .btn-reject:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
             width: 100%;
-            height: 80px;
-            margin: 10px 0;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            box-shadow: 0 4px 20px var(--primary-glow);
+        }
+
+        /* Login Inputs */
+        input {
+            width: 100%;
+            padding: 14px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid #334155;
+            border-radius: 10px;
+            color: white;
             font-family: inherit;
+            margin-top: 8px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        /* Animations */
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse-yellow {
+            0% {
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+            }
+        }
+
+        @keyframes pulse-blue {
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
         }
 
         .hidden {
-            display: none;
+            display: none !important;
         }
 
-        #status-message {
-            margin-top: 20px;
-            padding: 10px;
-            border-radius: 4px;
-            text-align: center;
-            font-weight: bold;
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
         }
 
-        .success {
-            background: #c6f6d5;
-            color: #22543d;
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
         }
 
-        .error {
-            background: #fed7d7;
-            color: #742a2a;
+        .modal-box {
+            background: #1e293b;
+            border: 1px solid var(--glass-border);
+            padding: 32px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 420px;
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-overlay.open .modal-box {
+            transform: scale(1);
+        }
+
+        /* Toast Animation */
+        .toast {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(16, 185, 129, 0.2);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            border-left: 4px solid #10b981;
+            padding: 12px 18px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            z-index: 20;
+            cursor: default;
+
+            /* Initial state for animation */
+            transform: translateX(120%);
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.4);
+            border-left-color: #10b981;
+        }
+
+        .toast.error {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+            border-left-color: #ef4444;
         }
     </style>
-    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1001.0.min.js"></script>
-    <script src="https://rawgit.com/aws-amplify/amplify-js/master/dist/aws-amplify.min.js"></script>
-    <!-- Note: For simplicity in this demo, we'll use a basic fetch flow. In a real app, use Amplify Auth -->
 </head>
 
 <body>
 
-    <div id="login-screen" class="container">
-        <h1>Login Required</h1>
-        <p>Please sign in to review this approval request.</p>
-        <div class="section">
-            <div class="label">Username</div>
-            <input type="text" id="username" style="width: 100%; padding: 8px; margin-bottom: 10px;">
-            <div class="label">Password</div>
-            <input type="password" id="password" style="width: 100%; padding: 8px; margin-bottom: 20px;">
-            <button class="btn-login" onclick="login()">Sign In</button>
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="container" style="max-width: 400px;">
+        <div class="card">
+            <div class="header-content">
+                <div style="font-size: 40px; margin-bottom: 10px;">🛡️</div>
+                <h1>Mission Control</h1>
+                <p>Secure Access Required</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label class="stat-label">Identity</label>
+                <input type="text" id="username" placeholder="admin@example.com">
+            </div>
+
+            <div style="margin-bottom: 32px;">
+                <label class="stat-label">Passcode</label>
+                <input type="password" id="password" placeholder="••••••••">
+            </div>
+
+            <button class="btn-primary" onclick="login()">Initialize Session</button>
+            <p id="login-error" class="text-danger"
+                style="text-align: center; margin-top: 16px; font-size: 13px; opacity: 0;"></p>
         </div>
-        <div id="login-error" class="error hidden"></div>
     </div>
 
-    <div id="approval-screen" class="container hidden">
-        <h1>Incident Approval Request</h1>
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="container hidden">
+        <!-- Main Intel Card -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <div>
+                    <div class="stat-label" style="color: var(--primary);">Incident Detected</div>
+                    <h2 style="font-size: 24px; margin-top: 4px;" id="incident-id">Loading ID...</h2>
+                </div>
+                <div id="status-badge" class="badge badge-pending">Analyzing</div>
+            </div>
 
-        <div class="section">
-            <div class="label">Incident ID</div>
-            <div class="value" id="incident-id">Loading...</div>
-        </div>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Risk Assessment</div>
+                    <div class="stat-value text-danger" id="risk-level">...</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Cost Impact</div>
+                    <div class="stat-value" id="cost">...</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Suggested Action</div>
+                    <div class="stat-value text-primary" id="recommendation">...</div>
+                </div>
+            </div>
 
-        <div class="section">
-            <div class="label">Analysis</div>
-            <div class="value" id="analysis">Loading...</div>
-        </div>
+            <div
+                style="margin-top: 24px; background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <div class="stat-label" style="margin-bottom: 8px;">Root Cause Analysis</div>
+                <div style="font-size: 14px; line-height: 1.6; color: #e2e8f0;" id="root-cause">
+                    AI is processing system logs...
+                </div>
+            </div>
 
-        <div class="section">
-            <div class="label">Risk Assessment</div>
-            <div class="value">
-                Risk Level: <span id="risk-level" class="risk-high">...</span><br>
-                Est. Cost: <span id="cost" class="cost">...</span>
+            <!-- Action Buttons -->
+            <div id="action-panel" class="actions hidden">
+                <button class="btn-reject" onclick="openModal('REJECT')">Decline Fix</button>
+                <button class="btn-approve" onclick="openModal('APPROVE')">Authorize Auto-Heal</button>
             </div>
         </div>
 
-        <div class="section">
-            <div class="label">Status</div>
-            <div class="value" id="status">PENDING</div>
-        </div>
+        <!-- Live Operations Feed -->
+        <div class="card">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                <div
+                    style="width: 8px; height: 8px; background: var(--success); border-radius: 50%; box-shadow: 0 0 10px var(--success);">
+                </div>
+                <h2>Remediation Protocol</h2>
+            </div>
 
-        <div class="actions" id="action-buttons">
-            <button class="btn-approve" onclick="openModal('APPROVE')">Approve</button>
-            <button class="btn-reject" onclick="openModal('REJECT')">Reject</button>
-        </div>
+            <div class="timeline">
+                <div class="timeline-item completed">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>Anomaly Detection</h4>
+                        <p>CloudWatch Alarm signal received.</p>
+                    </div>
+                </div>
+                <div class="timeline-item completed">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>AI Diagnosis</h4>
+                        <p>Root cause identified by Bedrock LLM.</p>
+                    </div>
+                </div>
+                <div id="step-approval" class="timeline-item active">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>Human Authorization</h4>
+                        <p>Waiting for SRE approval...</p>
+                    </div>
+                </div>
+                <div id="step-healing" class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>Autonomous Healing</h4>
+                        <p>Executing infrastructure commands.</p>
+                    </div>
+                </div>
+                <div id="step-verify" class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>Verification Scan</h4>
+                        <p>Validating service health metrics.</p>
+                    </div>
+                </div>
+            </div>
 
-        <div id="status-message" class="hidden"></div>
+            <div id="console-logs" class="console">
+                <div class="console-line">
+                    <span class="console-ts">[SYSTEM]</span>
+                    <span class="console-msg">Connection established. Ready.</span>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div id="comment-modal" class="modal">
-        <div class="modal-content">
-            <h2 id="modal-title">Confirm Action</h2>
-            <p>Add an optional comment:</p>
-            <textarea id="comment-text" placeholder="Reason for decision..."></textarea>
-            <div class="actions" style="margin-top: 10px;">
-                <button onclick="submitDecision()" class="btn-login">Confirm</button>
-                <button onclick="closeModal()" style="background: #e2e8f0; color: #333;">Cancel</button>
+    <!-- MODAL -->
+    <div id="comment-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h2 style="margin-bottom: 12px;">Confirm Decision</h2>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+                Please provide a reason or note for the audit log before proceeding.
+            </p>
+            <textarea id="comment-text"
+                style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #334155; border-radius: 8px; padding: 12px; color: white; min-height: 80px; font-family: inherit; margin-bottom: 24px; resize: vertical;"
+                placeholder="Enter notes..."></textarea>
+            <div style="display: flex; gap: 12px;">
+                <button style="flex: 1; background: transparent; border: 1px solid #475569; color: var(--text-muted);"
+                    onclick="closeModal()">Cancel</button>
+                <button class="btn-primary" style="flex: 1;" onclick="submitDecision()">Confirm</button>
+            </div>
+            <div id="status-toast" class="toast hidden">
+                <div id="toast-icon" style="font-size: 24px;"></div>
+                <div>
+                    <h4 id="toast-title" style="margin: 0; font-size: 14px;"></h4>
+                    <div id="toast-desc" style="font-size: 12px; color: rgba(255,255,255,0.7);"></div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Configuration - TO BE REPLACED BY DEPLOY SCRIPT
+        // Config injected during deploy
         const CONFIG = {
             API_URL: 'https://t6xl3sgnx1.execute-api.us-east-1.amazonaws.com',
             USER_POOL_ID: 'us-east-1_6zYrX2ZdE',
@@ -226,155 +655,244 @@
 
         let idToken = null;
         let currentAction = null;
+        let pollInterval = null;
+        let toastShown = false;
 
-        // Parse query params
+        // Check URL params
         const urlParams = new URLSearchParams(window.location.search);
         const approvalId = urlParams.get('approvalId');
 
+        // --- Auth Logic ---
         async function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const btn = document.querySelector('.btn-primary');
+            const errEl = document.getElementById('login-error');
+
+            btn.textContent = "Authenticating...";
+            btn.disabled = true;
+
+            AWS.config.region = CONFIG.REGION;
 
             try {
-                // Simple Cognito Auth using AWS SDK (Mocked for this single file demo to avoid huge dependencies)
-                // In reality, we'd use AmazonCognitoIdentity.CognitoUser etc.
-                // For this demo, we will simulate the auth flow or assume the user provides a valid token if we had a full auth library.
-                // BUT, to make this actually work without a build step, we'll use a raw fetch to Cognito IDP if possible, or just assume success for the UI demo if we can't easily bundle the SDK.
-
-                // ACTUALLY, let's use the AWS SDK included via CDN.
-                AWS.config.region = CONFIG.REGION;
                 const cognito = new AWS.CognitoIdentityServiceProvider();
-
-                const params = {
+                const res = await cognito.initiateAuth({
                     AuthFlow: 'USER_PASSWORD_AUTH',
                     ClientId: CONFIG.CLIENT_ID,
-                    AuthParameters: {
-                        'USERNAME': username,
-                        'PASSWORD': password
-                    }
-                };
+                    AuthParameters: { 'USERNAME': user, 'PASSWORD': pass }
+                }).promise();
 
-                const data = await cognito.initiateAuth(params).promise();
-                if (data.AuthenticationResult) {
-                    idToken = data.AuthenticationResult.IdToken;
-                    document.getElementById('login-screen').classList.add('hidden');
-                    document.getElementById('approval-screen').classList.remove('hidden');
-                    loadApprovalDetails();
-                } else if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
-                    // Handle new password (simplified: just alert)
-                    const newPw = prompt("New password required. Enter new password:");
-                    const challengeParams = {
+                if (res.AuthenticationResult) {
+                    idToken = res.AuthenticationResult.IdToken;
+                    transitionToDashboard();
+                } else if (res.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+                    const newPw = prompt("System Update: New Password Required");
+                    if (!newPw) return;
+                    const newRes = await cognito.respondToAuthChallenge({
                         ChallengeName: 'NEW_PASSWORD_REQUIRED',
                         ClientId: CONFIG.CLIENT_ID,
-                        ChallengeResponses: {
-                            'USERNAME': username,
-                            'NEW_PASSWORD': newPw,
-                            'SECRET_HASH': data.Session // If needed
-                        },
-                        Session: data.Session
-                    };
-                    const challengeData = await cognito.respondToAuthChallenge(challengeParams).promise();
-                    idToken = challengeData.AuthenticationResult.IdToken;
-                    document.getElementById('login-screen').classList.add('hidden');
-                    document.getElementById('approval-screen').classList.remove('hidden');
-                    loadApprovalDetails();
+                        ChallengeResponses: { 'USERNAME': user, 'NEW_PASSWORD': newPw },
+                        Session: res.Session
+                    }).promise();
+                    idToken = newRes.AuthenticationResult.IdToken;
+                    transitionToDashboard();
                 }
-            } catch (err) {
-                console.error(err);
-                document.getElementById('login-error').textContent = err.message;
-                document.getElementById('login-error').classList.remove('hidden');
+            } catch (e) {
+                console.error(e);
+                errEl.textContent = "Access Denied: " + e.message;
+                errEl.style.opacity = 1;
+                btn.textContent = "Initialize Session";
+                btn.disabled = false;
             }
         }
 
-        async function loadApprovalDetails() {
-            if (!approvalId) {
-                showStatus("Missing approvalId in URL", "error");
-                return;
-            }
+        function transitionToDashboard() {
+            const login = document.getElementById('login-screen');
+            const dash = document.getElementById('dashboard');
 
+            login.style.opacity = '0';
+            login.style.transform = 'translateY(-20px)';
+
+            setTimeout(() => {
+                login.classList.add('hidden');
+                dash.classList.remove('hidden');
+                fetchData();
+                pollInterval = setInterval(fetchData, 3000);
+            }, 500);
+        }
+
+        // --- Data Logic ---
+        async function fetchData() {
+            if (!approvalId) return;
             try {
-                const response = await fetch(`${CONFIG.API_URL}/approval/${approvalId}`, {
-                    headers: { 'Authorization': idToken } // GET might be public, but let's send it anyway
+                const res = await fetch(`${CONFIG.API_URL}/approval/${approvalId}`, {
+                    headers: { 'Authorization': idToken }
                 });
-
-                if (!response.ok) throw new Error("Failed to fetch details");
-
-                const data = await response.json();
-
-                document.getElementById('incident-id').textContent = data.incident_id;
-
-                // Parse nested JSON strings if needed
-                let analysis = data.analysis;
-                if (typeof analysis === 'string') analysis = JSON.parse(analysis);
-                document.getElementById('analysis').textContent = analysis.recommended_action + ": " + analysis.reasoning;
-
-                let risk = data.risk_assessment;
-                if (typeof risk === 'string') risk = JSON.parse(risk);
-                document.getElementById('risk-level').textContent = risk.risk_level;
-                document.getElementById('cost').textContent = `$${risk.estimated_cost}`;
-
-                document.getElementById('status').textContent = data.status;
-
-                if (data.status !== 'PENDING') {
-                    document.getElementById('action-buttons').classList.add('hidden');
-                    showStatus(`Request already ${data.status}`, data.status === 'APPROVED' ? 'success' : 'error');
-                }
-
-            } catch (err) {
-                showStatus(err.message, "error");
+                const data = await res.json();
+                updateUI(data);
+            } catch (e) {
+                log(`[ERROR] Connection lost: ${e.message}`, 'error');
             }
         }
 
+        function updateUI(data) {
+            // Parse JSON fields safely
+            const safeParse = (str) => {
+                try { return typeof str === 'string' ? JSON.parse(str) : str; }
+                catch { return {}; }
+            };
+
+            const analysis = safeParse(data.analysis);
+            const risk = safeParse(data.risk_assessment);
+
+            // Basic Info
+            document.getElementById('incident-id').textContent = data.incident_id?.split('-')[0] || 'Unknown';
+            document.getElementById('root-cause').textContent = analysis.root_cause || "Pending analysis...";
+            document.getElementById('recommendation').textContent = analysis.recommended_action || "---";
+            document.getElementById('risk-level').textContent = risk.risk_level || "Calculating...";
+            document.getElementById('cost').textContent = risk.estimated_cost ? `$${risk.estimated_cost}` : "---";
+
+            // Status & Lifecycle
+            const status = data.status;
+            const badge = document.getElementById('status-badge');
+            const panel = document.getElementById('action-panel');
+
+            if (status === 'PENDING') {
+                panel.classList.remove('hidden');
+                badge.className = "badge badge-pending";
+                badge.innerHTML = `<span style="width: 8px; height: 8px; background: currentColor; border-radius: 50%;"></span> ACTION REQUIRED`;
+            } else {
+                panel.classList.add('hidden');
+
+                if (status === 'APPROVED') {
+                    badge.className = "badge badge-success";
+                    badge.textContent = "APPROVED - IN PROGRESS";
+                    updateTimeline('step-approval', 'completed');
+                } else {
+                    badge.className = "badge badge-danger";
+                    badge.textContent = "REJECTED";
+                    updateTimeline('step-approval', 'completed'); // Technically completed the step
+                }
+            }
+
+            // Real-time Steps (using merged data from backend)
+
+            // 1. Healing
+            if (data.healing_status) {
+                const isDone = data.healing_status === 'SUCCESS';
+                updateTimeline('step-healing', isDone ? 'completed' : 'active');
+                if (isDone) log("[HEALER] Infrastructure command executed successfully.");
+            }
+
+            // 2. Verification
+            if (data.verification_result) {
+                const ver = safeParse(data.verification_result);
+                const isVerified = ver.status === 'VERIFIED';
+
+                if (isVerified) {
+                    updateTimeline('step-verify', 'completed');
+                    badge.textContent = "RESOLVED - SYSTEM STABLE";
+                    log("[ANALYZER] Verification scan complete. System metrics nominal.");
+                    clearInterval(pollInterval); // Stop polling
+
+                    // Show Success Animation
+                    showToast('System Healed', 'Threat neutralized and verified.', 'success');
+                } else if (ver.status) {
+                    // If failed or other status
+                    log(`[ANALYZER] Verification status: ${ver.status}`);
+                }
+            }
+        }
+
+        function showToast(title, desc, type) {
+            if (toastShown) return;
+            toastShown = true;
+
+            const toast = document.getElementById('status-toast');
+            const tTitle = document.getElementById('toast-title');
+            const tDesc = document.getElementById('toast-desc');
+            const tIcon = document.getElementById('toast-icon');
+
+            toast.className = `toast ${type}`; // remove hidden, add type
+            tTitle.textContent = title;
+            tDesc.textContent = desc;
+            tIcon.textContent = type === 'success' ? '✅' : '❌';
+
+            // Slight delay for effect
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 500);
+
+            // Auto-hide after 4 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+                // Reset shown flag so it can reappear if needed (or keep true to show once per session)
+                // toastShown = false; 
+            }, 4500);
+        }
+
+        function updateTimeline(id, state) {
+            const el = document.getElementById(id);
+            // Reset classes carefully
+            if (state === 'active' && !el.classList.contains('completed')) {
+                el.classList.add('active');
+            }
+            if (state === 'completed') {
+                el.classList.remove('active');
+                el.classList.add('completed');
+            }
+        }
+
+        function log(msg, type = 'info') {
+            const consoleEl = document.getElementById('console-logs');
+            // Simple dedup
+            if (consoleEl.innerHTML.includes(msg)) return;
+
+            const div = document.createElement('div');
+            div.className = 'console-line';
+            const style = type === 'error' ? 'color: #f87171;' : '';
+
+            div.innerHTML = `
+            <span class="console-ts">[${new Date().toLocaleTimeString().split(' ')[0]}]</span>
+            <span class="console-msg" style="${style}">${msg}</span>
+        `;
+            consoleEl.prepend(div);
+        }
+
+        // --- Modal Logic ---
         function openModal(action) {
             currentAction = action;
-            document.getElementById('modal-title').textContent = action === 'APPROVE' ? 'Approve Action' : 'Reject Action';
-            document.getElementById('comment-modal').style.display = 'flex';
+            const modal = document.getElementById('comment-modal');
+            modal.classList.add('open');
         }
 
         function closeModal() {
-            document.getElementById('comment-modal').style.display = 'none';
-            document.getElementById('comment-text').value = '';
+            document.getElementById('comment-modal').classList.remove('open');
+            setTimeout(() => { document.getElementById('comment-text').value = ''; }, 300);
         }
 
         async function submitDecision() {
             const comment = document.getElementById('comment-text').value;
-            closeModal();
+            const btn = document.querySelector('#comment-modal .btn-primary');
+            const oldText = btn.textContent;
+
+            btn.textContent = "Processing...";
 
             try {
-                const response = await fetch(`${CONFIG.API_URL}/approval/${approvalId}/decision`, {
+                await fetch(`${CONFIG.API_URL}/approval/${approvalId}/decision`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': idToken
-                    },
-                    body: JSON.stringify({
-                        action: currentAction,
-                        comment: comment
-                    })
+                    headers: { 'Authorization': idToken, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: currentAction, comment: comment })
                 });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    showStatus("Decision submitted successfully!", "success");
-                    document.getElementById('action-buttons').classList.add('hidden');
-                    document.getElementById('status').textContent = currentAction + 'D';
-                } else {
-                    showStatus(data.error || "Failed to submit decision", "error");
-                }
-            } catch (err) {
-                showStatus(err.message, "error");
+                closeModal();
+                fetchData(); // Immediate update
+            } catch (e) {
+                log("Transaction failed: " + e.message, 'error');
+            } finally {
+                btn.textContent = oldText;
             }
         }
-
-        function showStatus(msg, type) {
-            const el = document.getElementById('status-message');
-            el.textContent = msg;
-            el.className = type;
-            el.classList.remove('hidden');
-        }
     </script>
-
 </body>
 
 </html>

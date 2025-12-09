@@ -43,6 +43,33 @@ def handler(event, context):
         # Remove taskToken from response for security
         if 'taskToken' in item:
             del item['taskToken']
+
+        # Fetch Incident Status for Real-time Updates
+        incident_id = item.get('incident_id')
+        incidents_table_name = os.environ.get('INCIDENTS_TABLE_NAME')
+        
+        if incident_id and incidents_table_name:
+            try:
+                inc_table = dynamodb.Table(incidents_table_name)
+                # Incidents table has composite key (incident_id + timestamp). 
+                # We query by Partition Key since we might not have the exact timestamp.
+                inc_response = inc_table.query(
+                    KeyConditionExpression=boto3.dynamodb.conditions.Key('incident_id').eq(incident_id)
+                )
+                inc_items = inc_response.get('Items', [])
+                if inc_items:
+                    # Expecting one, but take the latest if multiple
+                    inc_item = inc_items[0] 
+                    
+                    # Merge specific fields into the response
+                    item['incident_status'] = inc_item.get('status')
+                    item['healing_status'] = inc_item.get('healing_status')
+                    item['healing_result'] = inc_item.get('healing_result')
+                    item['verification_result'] = inc_item.get('verification')
+                    item['rollback_status'] = inc_item.get('rollback_status')
+            except Exception as e:
+                logger.error("Failed to fetch incident details: %s", e)
+                # Continue without incident details rather than failing
             
         return {
             'statusCode': 200,
