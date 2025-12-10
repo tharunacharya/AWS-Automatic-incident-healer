@@ -10,17 +10,30 @@ def handler(event, context):
     # Mock logic for cost estimation
     # In a real scenario, this would query AWS Pricing API
     
-    action = event.get('recommended_action', 'UNKNOWN')
+    import random
     
-    # Mock cost data
-    costs = {
-        'RESTART_SERVICE': 0.0,
-        'SCALE_UP': 50.0, # Estimated monthly cost increase
-        'CLEAR_CACHE': 0.0,
-        'REBOOT_INSTANCE': 0.0
+    # Extract action from nested 'analysis' if present (step functions structure)
+    # or direct root level (test events)
+    analysis = event.get('analysis', {})
+    action = analysis.get('recommended_action')
+    
+    if not action:
+        action = event.get('recommended_action', 'UNKNOWN')
+    
+    # Mock cost data (Base costs)
+    base_costs = {
+        'RESTART_SERVICE': 0.50,   # Nominal compute for restart
+        'SCALE_UP': 45.0,          # EC2/Fargate hourly/monthly rate
+        'CLEAR_CACHE': 0.10,       # Service call
+        'REBOOT_INSTANCE': 0.0,    # Free usually
+        'NONE': 0.0
     }
     
-    estimated_cost = costs.get(action, 100.0)
+    base_cost = base_costs.get(action, 100.0)
+    
+    # Add some realistic variance (±10%)
+    variance = base_cost * 0.1 * (random.random() - 0.5)
+    estimated_cost = round(max(0, base_cost + variance), 2)
     
     # Determine risk level based on cost and action type
     risk_level = 'LOW'
