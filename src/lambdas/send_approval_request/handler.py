@@ -73,7 +73,7 @@ def handler(event, context):
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*Recommended Action:*\n{analysis.get('recommended_action', 'N/A')}\n\n*Risk Level:* {risk_assessment.get('risk_level', 'HIGH')}\n*Cost Estimate:* ${risk_assessment.get('estimated_cost', 'N/A')}"
+                "text": f"*Recommended Action:*\n{analysis.get('recommended_action', 'N/A')}\n\n*Detailed Problem:*\n{analysis.get('detailed_root_cause', analysis.get('root_cause', 'N/A'))}\n\n*Why take this action?*\n{analysis.get('action_justification', analysis.get('reasoning', 'N/A'))}\n\n*Risk Level:* {risk_assessment.get('risk_level', 'HIGH')}\n*Cost Estimate:* ${risk_assessment.get('estimated_cost', 'N/A')}"
             }
         },
         {

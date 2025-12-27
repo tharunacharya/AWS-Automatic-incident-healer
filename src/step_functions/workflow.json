@@ -48,7 +48,8 @@
       "Resource": "${cost_estimator_arn}",
       "Parameters": {
         "analysis.$": "$.ParallelAnalysis[0]",
-        "prediction.$": "$.ParallelAnalysis[1]"
+        "prediction.$": "$.ParallelAnalysis[1]",
+        "alarm_name.$": "$.alarm_name"
       },
       "ResultPath": "$.RiskAssessment",
       "Next": "ApprovalChoice"

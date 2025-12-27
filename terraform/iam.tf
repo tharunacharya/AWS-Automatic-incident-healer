@@ -45,6 +45,13 @@ resource "aws_iam_role_policy" "detector_policy" {
       },
       {
         Action = [
+          "dynamodb:PutItem"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.audit_log.arn
+      },
+      {
+        Action = [
           "states:StartExecution"
         ]
         Effect   = "Allow"
@@ -94,10 +101,14 @@ resource "aws_iam_role_policy" "analyzer_policy" {
       },
       {
         Action = [
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:GetObject"
         ]
         Effect   = "Allow"
-        Resource = "${aws_s3_bucket.incident_logs.arn}/*"
+        Resource = [
+          "${aws_s3_bucket.incident_logs.arn}/*",
+          "${aws_s3_bucket.knowledge_base.arn}/*"
+        ]
       },
       {
         Action = [
@@ -105,6 +116,13 @@ resource "aws_iam_role_policy" "analyzer_policy" {
         ]
         Effect   = "Allow"
         Resource = aws_dynamodb_table.incidents.arn
+      },
+      {
+        Action = [
+          "dynamodb:PutItem"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.audit_log.arn
       },
       {
         Action = [
@@ -122,7 +140,18 @@ resource "aws_iam_role_policy" "analyzer_policy" {
 # --- Healer Role ---
 resource "aws_iam_role" "healer_role" {
   name               = "${var.project_name}-healer-role"
-  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = ["lambda.amazonaws.com", "ssm.amazonaws.com"]
+        }
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role_policy" "healer_policy" {
@@ -136,10 +165,17 @@ resource "aws_iam_role_policy" "healer_policy" {
         Action = [
           "ssm:StartAutomationExecution",
           "ssm:GetAutomationExecution",
-          "ssm:SendCommand"
+          "ssm:SendCommand",
+          "ssm:ListDocuments",
+          "ssm:DescribeDocument"
         ]
         Effect   = "Allow"
         Resource = "*"
+      },
+      {
+        Action = "iam:PassRole"
+        Effect = "Allow"
+        Resource = aws_iam_role.healer_role.arn
       },
       {
         Action = [
@@ -155,6 +191,13 @@ resource "aws_iam_role_policy" "healer_policy" {
         ]
         Effect   = "Allow"
         Resource = aws_dynamodb_table.incidents.arn
+      },
+      {
+        Action = [
+          "dynamodb:PutItem"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.audit_log.arn
       },
       {
         Action = [
@@ -328,6 +371,13 @@ resource "aws_iam_role_policy" "frontend_approval_handler_policy" {
         ]
         Effect   = "Allow"
         Resource = aws_dynamodb_table.incidents.arn
+      },
+      {
+        Action = [
+          "dynamodb:PutItem"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.audit_log.arn
       },
       {
         Action = [

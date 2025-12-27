@@ -18,6 +18,7 @@ resource "aws_lambda_function" "detector" {
     variables = {
       TABLE_NAME = aws_dynamodb_table.incidents.name
       STATE_MACHINE_ARN = aws_sfn_state_machine.incident_workflow.arn
+      AUDIT_TABLE_NAME = aws_dynamodb_table.audit_log.name
     }
   }
 }
@@ -42,6 +43,8 @@ resource "aws_lambda_function" "analyzer" {
     variables = {
       TABLE_NAME = aws_dynamodb_table.incidents.name
       LOGS_BUCKET = aws_s3_bucket.incident_logs.id
+      KNOWLEDGE_BASE_BUCKET = aws_s3_bucket.knowledge_base.id
+      AUDIT_TABLE_NAME = aws_dynamodb_table.audit_log.name
     }
   }
 }
@@ -65,6 +68,10 @@ resource "aws_lambda_function" "healer" {
   environment {
     variables = {
       TABLE_NAME = aws_dynamodb_table.incidents.name
+      SSM_DOC_RESTART_SERVICE = aws_ssm_document.restart_service.name
+      SSM_DOC_SCALE_UP = aws_ssm_document.scale_up.name
+      AUDIT_TABLE_NAME = aws_dynamodb_table.audit_log.name
+      HEALER_ROLE_ARN  = aws_iam_role.healer_role.arn
     }
   }
 }
@@ -186,6 +193,7 @@ resource "aws_lambda_function" "frontend_approval_handler" {
     variables = {
       APPROVALS_TABLE_NAME = aws_dynamodb_table.approvals.name
       INCIDENTS_TABLE_NAME = aws_dynamodb_table.incidents.name
+      AUDIT_TABLE_NAME = aws_dynamodb_table.audit_log.name
     }
   }
 }

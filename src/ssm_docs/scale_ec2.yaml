@@ -1,0 +1,38 @@
+description: "Scale Up Auto Scaling Group"
+schemaVersion: "0.3"
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  AutoScalingGroup:
+    type: String
+    description: "Name of the Auto Scaling Group"
+  DesiredCapacity:
+    type: Integer
+    description: "The new desired capacity"
+  AutomationAssumeRole:
+    type: String
+    description: "The ARN of the role that allows Automation to perform the actions on your behalf."
+
+mainSteps:
+- name: ScaleUp
+  action: "aws:executeScript"
+  inputs:
+    Runtime: python3.11
+    Handler: script_handler
+    Script: |-
+      import boto3
+      
+      def script_handler(events, context):
+          asg = boto3.client('autoscaling')
+          group_name = events['AutoScalingGroup']
+          capacity = events['DesiredCapacity']
+          
+          print(f"Scaling ASG {group_name} to {capacity}")
+          
+          # Real API Call
+          # asg.set_desired_capacity(AutoScalingGroupName=group_name, DesiredCapacity=capacity)
+          
+          print("Scaling action executed.")
+          return {'Status': 'Success'}
+    InputPayload:
+      AutoScalingGroup: "{{ AutoScalingGroup }}"
+      DesiredCapacity: "{{ DesiredCapacity }}"

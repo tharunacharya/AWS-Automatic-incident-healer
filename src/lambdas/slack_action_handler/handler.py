@@ -83,7 +83,10 @@ def handler(event, context):
     item = response.get('Item')
     
     if not item:
-        return {'statusCode': 404, 'body': 'Approval request not found'}
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'text': "⚠️ Interaction Expired: This approval request is no longer active.", 'replace_original': False})
+        }
         
     if item.get('status') != 'PENDING':
         return {

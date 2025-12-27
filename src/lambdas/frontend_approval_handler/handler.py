@@ -10,6 +10,25 @@ dynamodb = boto3.resource('dynamodb')
 sfn = boto3.client('stepfunctions')
 
 TABLE_NAME = os.environ['APPROVALS_TABLE_NAME']
+AUDIT_TABLE_NAME = os.environ.get('AUDIT_TABLE_NAME')
+
+def write_audit_entry(approval_id, action, user, comment):
+    if not AUDIT_TABLE_NAME:
+        return
+    try:
+        table = dynamodb.Table(AUDIT_TABLE_NAME)
+        item = {
+            'IncidentID': approval_id, # Using Approval ID as correlation ID for this entry type
+            'Timestamp': datetime.now().isoformat(),
+            'EventType': 'HUMAN_DECISION',
+            'ActionType': action,
+            'Details': json.dumps({'user': user, 'comment': comment}),
+            'Component': 'FrontendApprovalHandler'
+        }
+        table.put_item(Item=item)
+        logger.info(f"Audit entry written for {approval_id}")
+    except Exception as e:
+        logger.error(f"Failed to write audit entry: {e}")
 
 from decimal import Decimal
 from datetime import datetime
@@ -126,6 +145,9 @@ def handler(event, context):
              # Already processed
              return {'statusCode': 409, 'body': json.dumps({'error': 'Request already processed', 'status': item.get('status')})}
         
+        # Write Audit Log
+        write_audit_entry(approval_id, action, user_email, comment)
+
         # Resume Step Functions
         try:
             if action == 'APPROVE':

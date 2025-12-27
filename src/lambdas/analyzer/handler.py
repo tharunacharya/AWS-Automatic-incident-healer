@@ -10,9 +10,11 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource('dynamodb')
 logs_client = boto3.client('logs')
 bedrock = boto3.client('bedrock-runtime')
+s3 = boto3.client('s3')
 
 TABLE_NAME = os.environ['TABLE_NAME']
 LOGS_BUCKET = os.environ['LOGS_BUCKET']
+KNOWLEDGE_BASE_BUCKET = os.environ.get('KNOWLEDGE_BASE_BUCKET')
 MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"
 
 def get_logs(log_group, start_time, end_time):
@@ -45,13 +47,49 @@ def get_logs(log_group, start_time, end_time):
         logger.error("Error fetching logs: %s", e)
         return []
 
+def get_runbook(alarm_name):
+    """
+    Fetches the runbook from S3 Knowledge Base.
+    Simple mapping: AlarmName -> AlarmName.md
+    """
+    if not KNOWLEDGE_BASE_BUCKET:
+        logger.warning("No Knowledge Base Bucket configured.")
+        return None
+
+    key = f"runbooks/{alarm_name}.md"
+    try:
+        response = s3.get_object(Bucket=KNOWLEDGE_BASE_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        logger.info(f"Retrieved runbook for {alarm_name}")
+        return content
+    except Exception as e:
+        logger.warning(f"No runbook found for {alarm_name}: {e}")
+        return None
+
 def invoke_bedrock(logs, alarm_name, reason, analysis_type="ROOT_CAUSE"):
+    
+    # RAG: Fetch Context
+    runbook = get_runbook(alarm_name)
+    context_str = ""
+    if runbook:
+        context_str = f"""
+    *** ENTERPRISE KNOWLEDGE BASE (RUNBOOK) ***
+    The following is the official internal runbook for this alarm. 
+    You MUST prioritize these instructions over general knowledge.
+    
+    {runbook}
+    
+    *** END RUNBOOK ***
+        """
+
     base_prompt = f"""
     You are a Site Reliability Engineer. Analyze the following incident.
     
     Alarm Name: {alarm_name}
     Alarm Reason: {reason}
     Analysis Type: {analysis_type}
+    
+    {context_str}
     
     Recent Logs:
     {json.dumps(logs, indent=2)}
@@ -61,8 +99,9 @@ def invoke_bedrock(logs, alarm_name, reason, analysis_type="ROOT_CAUSE"):
         prompt = base_prompt + """
         Task:
         1. Identify any potential future risks or anomalies related to this alarm.
-        2. Recommend a Preventive Action.
-        3. Provide a Risk Score (0.0 to 1.0).
+        2. Analyze potential cascading failures in downstream microservices based on log patterns.
+        3. Recommend a Preventive Action.
+        4. Provide a Risk Score (0.0 to 1.0).
         
         Output JSON format:
         {
@@ -90,15 +129,18 @@ def invoke_bedrock(logs, alarm_name, reason, analysis_type="ROOT_CAUSE"):
     else: # ROOT_CAUSE
         prompt = base_prompt + """
         Task:
-        1. Identify the Root Cause.
+        1. Identify the Root Cause. Provide a detailed explanation of the problem and its origin.
         2. Recommend a Healing Action (must be one of: RESTART_SERVICE, SCALE_UP, CLEAR_CACHE, REBOOT_INSTANCE, NONE).
-        3. Provide a Confidence Score (0.0 to 1.0).
-        4. Explain your reasoning.
+        3. Justify the Recommended Action. Explain why this specific action is selected and how it resolves the issue.
+        4. Provide a Confidence Score (0.0 to 1.0).
+        5. Explain your reasoning. Cite the Runbook if applicable.
         
         Output JSON format:
         {
             "root_cause": "string",
+            "detailed_root_cause": "string",
             "recommended_action": "string",
+            "action_justification": "string",
             "confidence": float,
             "reasoning": "string"
         }
@@ -153,13 +195,17 @@ def invoke_bedrock(logs, alarm_name, reason, analysis_type="ROOT_CAUSE"):
             if alarm_name == "HighTraffic":
                 return {
                     "root_cause": "Simulated: High traffic load detected",
+                    "detailed_root_cause": "Simulated: A sudden spike in inbound traffic approaching instance limits.",
                     "recommended_action": "SCALE_UP",
+                    "action_justification": "Scaling up allows the fleet to handle the increased load without degradation.",
                     "confidence": 0.95,
                     "reasoning": "Traffic spike requires scaling up."
                 }
             return {
                 "root_cause": "Simulated: High CPU usage detected in logs",
+                "detailed_root_cause": "Simulated: The application process is stuck in a compute-intensive loop causing CPU saturation.",
                 "recommended_action": "RESTART_SERVICE",
+                "action_justification": "Restarting the service will terminate the stuck process and restore normal operation.",
                 "confidence": 0.85,
                 "reasoning": "Simulated reasoning based on alarm name."
             }
