@@ -32,39 +32,61 @@ The system operates on a "Detect -> Analyze -> Heal" loop:
 
 ---
 
-## 3. Technology Stack
-Built entirely on a **Serverless Event-Driven Architecture**:
+## 3. Detailed Technology Stack
+This project is built on a **Serverless Event-Driven Architecture** designed for high scalability and zero maintenance.
 
-| Component | Technology | Role |
-| :--- | :--- | :--- |
-| **Orchestration** | AWS Step Functions | Manages the workflow state (Analyzing -> waiting for approval -> Healing). |
-| **Compute** | AWS Lambda (Python) | Serverless execution of logic (Healer, Analyzer, Estimator). |
-| **AI / ML** | Amazon Bedrock (Claude 3) | Generative AI for log analysis and decision making. |
-| **Database** | Amazon DynamoDB | Stores incident state, audit logs, and risk assessments. |
-| **Integration** | Amazon EventBridge | Routes CloudWatch alarms to the workflow. |
-| **Remediation** | AWS SSM Automation | Executes scripts and scaling events on EC2 instances. |
-| **Interface** | Slack (Block Kit) | Interactive approval dashboard for engineers. |
-| **IaC** | Terraform | Fully automated infrastructure deployment. |
+### Core Infrastructure (AWS)
+*   **AWS Lambda (Python 3.9):** The compute layer. We use separate micro-functions for distinct responsibilities:
+    *   `Detector`: Parses CloudWatch alarms.
+    *   `Analyzer`: Interfaces with Bedrock.
+    *   `Healer`: a executing SSM documents.
+    *   `CostEstimator`: Queries Pricing API.
+*   **Amazon EventBridge:** The central nervous system. It filters CloudWatch Alarm events and routes them to the `Detector` Lambda using custom patterns.
+*   **AWS Step Functions:** Provides state management. It handles the "Pause for Approval" logic using task tokens (`.waitForTaskToken`), ensuring the Lambda doesn't time out while waiting for a human.
+*   **Amazon DynamoDB:** A NoSQL database used for:
+    *   `Incidents Table`: Tracking the state of every alert.
+    *   `Audit Table`: Immutable log of all decisions (Governance).
+    *   `Approvals Table`: Managing Slack token callbacks.
+
+### Artificial Intelligence
+*   **Amazon Bedrock:** The GenAI managed service.
+    *   **Model:** `anthropic.claude-3-sonnet-20240229-v1:0`. Chosen for its balance of high reasoning capability and speed/cost efficiency compared to Opus.
+    *   **Prompt Engineering:** We use "Chain of Thought" prompting to force the model to explain its reasoning (`detailed_root_cause`, `action_justification`) before outputting the extensive JSON response.
+    *   **RAG (Retrieval Augmented Generation):** The system dynamically injects relevant "Runbook" markdown content into the prompt context window based on the alarm type.
+
+### Automation & Remediation
+*   **AWS Systems Manager (SSM):**
+    *   **Automation Documents:** YAML-based workflows (e.g., `AWS-RestartService`).
+    *   **Run Command:** Securely executes shell scripts on instances without opening port 22 (SSH).
+
+### Developer Tools & Libraries
+*   **Terraform:** Infrastructure as Code (IaC) to provision all resources (IAM, Lambdas, databases) reproducibly.
+*   **Boto3:** The AWS SDK for Python, used within Lambdas for all API interactions.
+*   **Slack Block Kit:** Used to construct rich, interactive UI elements (buttons, sections) within the chat interface.
 
 ---
 
-## 4. Key Benefits & ROI
+## 4. Enterprise Value & Implementation Case
 
-### ✅ For the Business
-*   **Reduced Downtime:** "Self-healing" incidents are resolved in <30 seconds, maintaining SLA uptime.
-*   **Operational Cost Savings:** Prevents expensive outages and reduces overtime pay for on-call engineers.
+### Why implement this in an Enterprise?
+In a large-scale organization (Fortune 500, High-Growth Tech), infrastructure complexity outpaces human ability to manage it.
 
-### ✅ For the Engineers
-*   **No More 3 AM Wakeups:** Routine issues are handled automatically.
-*   **Faster Debugging:** The AI provides a "Detailed Root Cause" instanty, saving hours of log hunting.
-
-### ✅ For Compliance / Security
-*   **Least Privilege:** The system uses IAM roles, not shared credentials.
-*   **Full Auditability:** "Who approved this server reboot?" The Audit Log answers this instantly.
+1.  **Scale Management:** An enterprise with 10,000 servers generates thousands of false positives. This AI filters 99% of noise and only escalates genuine anomalies.
+2.  **SLA Compliance (99.99%):** automated healing responds in milliseconds. A human takes minutes. This differential is often the gap between adhering to SLAs and paying penalties.
+3.  **Governance & Audit Compliance (SOC2, HIPAA):**
+    *   **Problem:** In traditional ops, an engineer logs in via SSH and fixes a server. There is no record of *what* they typed.
+    *   **Solution:** This system logs the *intent*, the *approval*, and the *execution output* to a tamper-proof DynamoDB table. This satisfies strict audit requirements.
+4.  **Cost Control (FinOps):**
+    *   **Problem:** Engineers often over-provision resources (Scale Up) to fix unexpected utilization, blowing the budget.
+    *   **Solution:** The Cost Estimator acts as a "FinOps Guardrail," preventing any automated action that exceeds a defined budget threshold ($20/action).
+5.  **Knowledge Retention:**
+    *   **Problem:** Senior engineers leave, taking tribal knowledge with them.
+    *   **Solution:** By encoding debugging logic into Knowledge Base runbooks and Prompts, the "Expertise" stays within the platform.
 
 ---
 
-## 5. Unique Innovations
-1.  **AI Cost-Awareness:** Unlike standard scripts, this system knows the *price* of its actions. It won't accidentally spin up expensive resources without asking.
-2.  **Dual-Mode Operation:** It supports both "Autopilot" (for low risk) and "Co-pilot" (for high risk) modes seamlessly.
-3.  **Context-Aware:** It doesn't just reboot blindly; it checks the *Runbook* first to ensure it follows company procedures.
+## 5. Summary for AI Context Loading
+**System Identity:** AI Autonomous Incident Healer.
+**Primary Function:** Self-healing Infrastructure Agent.
+**Logic Flow:** Alarm -> EventBridge -> Lambda -> Bedrock (Analysis) -> Step Functions (Orchestration) -> Slack (Approval) -> SSM (Remediation).
+**Key Differentiator:** "Cost-Aware Governance" — it won't fix things if it's too expensive without permission.
