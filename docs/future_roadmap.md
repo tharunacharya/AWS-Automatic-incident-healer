@@ -52,22 +52,3 @@ The project is a robust **Prototype/MVP** of an Autonomous Incident Response sys
     *   **Upgrade**: Record every "Approve" and "Reject" decision.
     *   **Benefit**: Use this dataset to fine-tune the prompt or the model itself. If users keep rejecting "Restart", the AI learns to stop suggesting it for that specific error.
 
-### Horizon 3: Enterprise Scale (Making it Safe & Everywhere)
-*Focus: Governance, Security, and multi-team support.*
-
-7.  **Immutable Audit Ledger**
-    *   **Upgrade**: Store every incident, analysis, decision, and outcome in **Amazon QLDB** (Quantum Ledger Database).
-    *   **Benefit**: cryptographically verifiable history for compliance/auditing.
-
-8.  **Multi-Account Hub-and-Spoke**
-    *   **Upgrade**: Deploy the "Brain" (Step Functions/Bedrock) in a central "Ops" account. Deploy "Sensors" (EventBridge) and "Hands" (SSM) in spoke accounts (Dev, Stage, Prod).
-    *   **Benefit**: Centralized management of incidents across the entire organization.
-
-9.  **RBAC for Approvals**
-    *   **Upgrade**: Integrate with existing Identity Groups (AD/Okta).
-    *   **Benefit**: Only "Database Admins" can approve RDS changes; only "FinOps" can approve cost-increasing scaling actions.
-
----
-
-## 3. Summary of Impact
-Implementing these upgrades transforms the project from a **"Cool Demo"** into a **"Strategic AIOps Platform"** that could significantly reduce Mean Time To Recovery (MTTR) and operational toil.
