@@ -4,6 +4,7 @@ import urllib.request
 
 def send_test_notification(webhook_url):
     # Mimic the payload structure from the Lambda
+    # Mimicking it
     message = {
         "blocks": [
             {
